@@ -8,11 +8,13 @@ def get_tickers(ticker_names):
     response = requests.get(url, params=params)
     return response.json()
 
-def get_stocks(ticker_names, starting_date,  ending_date):
+def get_stocks(ticker_names, stock_market_names, starting_date,  ending_date):
     url = local_path + '/get_stocks'
     params = {}
     if ticker_names:
         params['ticker_name'] = ticker_names
+    if stock_market_names:
+        params['stock_market_name'] = stock_market_names
     if starting_date:
         params['starting_date'] = starting_date
     if ending_date:

@@ -7,8 +7,8 @@ def main():
     starting_date = '2022-12-31'
     ending_date = '2023-12-31'
     # Fetch historical data using Stocker.API
-    aapl_data = pandas.DataFrame(get_stocks(ticker_names="AAPL", starting_date=starting_date, ending_date=ending_date))
-    agg_data = pandas.DataFrame(get_stocks(ticker_names="AGG", starting_date=starting_date, ending_date=ending_date))
+    aapl_data = pandas.DataFrame(get_stocks(ticker_names="AAPL", stock_market_names="NASDAQ", starting_date=starting_date, ending_date=ending_date))
+    agg_data = pandas.DataFrame(get_stocks(ticker_names="AGG", stock_market_names="OTHER", starting_date=starting_date, ending_date=ending_date))
 
     # Calculate annualized returns
     aapl_return = calculate_annualized_return(aapl_data)
@@ -16,9 +16,9 @@ def main():
 
     # Initialize and operate the portfolio
     initial_funds = {'stocks': 0, 'bonds': 0, 'cash': 10000}
-    portfolio = BalancedPortfolio(initial_funds=initial_funds, stock_growth_rate=aapl_return, bond_growth_rate=agg_return, start_date=datetime.datetime(2023, 1, 1))
+    portfolio = BalancedPortfolio(initial_funds=initial_funds, stock_growth_rate=aapl_return, bond_growth_rate=agg_return, start_date=datetime.datetime(2022, 12, 31))
     portfolio.allocate(100, 0)
-    portfolio.update_date(datetime.datetime(2024, 1, 1))
+    portfolio.update_date(datetime.datetime(2023, 12, 31))
     portfolio.rebalance()
 
     # Print the portfolio status
