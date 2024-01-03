@@ -1,10 +1,11 @@
-import datetime
+import pandas as pd
+from datetime import datetime
 
 class BalancedPortfolio():
-    def __init__(self, initial_funds: dict, stock_growth_rate: float, bond_growth_rate: float, start_date: datetime):
+    def __init__(self, initial_funds: dict, stock_returns: pd.Series, bond_returns: pd.Series, start_date: datetime):
         self.funds = initial_funds
-        self.stock_growth_rate = stock_growth_rate
-        self.bond_growth_rate = bond_growth_rate
+        self.stock_returns = stock_returns
+        self.bond_returns = bond_returns
         self.start_date = start_date
         self.current_date = start_date
         self.stocks = 0.0
@@ -28,17 +29,57 @@ class BalancedPortfolio():
         self.current_date = new_date
 
     def get_total_value(self):
-        days_passed = (self.current_date - self.start_date).days
-        years_passed = days_passed / 365.25
-        current_stocks_value = self.funds['stocks'] * (1 + self.stock_growth_rate) ** years_passed
-        current_bonds_value = self.funds['bonds'] * (1 + self.bond_growth_rate) ** years_passed
+
+        if self.stock_returns.index.tz is not None:
+            self.stock_returns.index = self.stock_returns.index.tz_localize(None)
+        if self.bond_returns.index.tz is not None:
+            self.bond_returns.index = self.bond_returns.index.tz_localize(None)
+
+        # Use returns series to calculate current value
+        # This part will require logic to select the right return value from the series
+        current_stock_growth = self.stock_returns.loc[:self.current_date].iloc[-1]
+        current_bond_growth = self.bond_returns.loc[:self.current_date].iloc[-1]
+
+        current_stocks_value = self.funds['stocks'] * (1 + current_stock_growth)
+        current_bonds_value = self.funds['bonds'] * (1 + current_bond_growth)
         return current_stocks_value + current_bonds_value + self.funds['cash']
 
     def __str__(self):
         return f"Portfolio Allocation: {self.stocks}% Stocks, {self.bonds}% Bonds, {self.cash}% Cash, Total Value: {self.get_total_value():.2f}"
 
-# Function to calculate annualized return from historical data
-def calculate_annualized_return(hist_data):
+
+def calculate_returns(hist_data):
+    # Ensure the data is sorted by date
+    hist_data = hist_data.sort_index()
+
+    # Full Return
     start_price = hist_data['close'].iloc[0]
     end_price = hist_data['close'].iloc[-1]
-    return (end_price / start_price) - 1
+    full_return = (end_price / start_price) - 1
+    # Creating a single-value Series for full return
+    full_return_series = pd.Series([full_return], index=[hist_data.index[-1]])
+
+    # Annualized Return
+    annualized_return = hist_data['close'].resample('Y').ffill().pct_change()
+
+    # Quarterly Return
+    quarterly_returns = hist_data['close'].resample('Q').ffill().pct_change()
+
+    # Monthly Return
+    monthly_returns = hist_data['close'].resample('M').ffill().pct_change()
+
+    # Weekly Return
+    weekly_returns = hist_data['close'].resample('W').ffill().pct_change()
+
+    # Daily Return
+    daily_returns = hist_data['close'].pct_change()
+
+    return {
+        'full_return': full_return_series,
+        'annualized_return': annualized_return,
+        'quarterly_returns': quarterly_returns,
+        'monthly_returns': monthly_returns,
+        'weekly_returns': weekly_returns,
+        'daily_returns': daily_returns
+    }
+
