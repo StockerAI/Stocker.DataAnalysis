@@ -2,55 +2,43 @@ import pandas as pd
 from datetime import datetime
 
 class BalancedPortfolio():
-    """
-    A class to represent a balanced investment portfolio.
-
-    Attributes:
-        funds (dict): A dictionary with the initial funds allocated to stocks, bonds, and cash.
-        stock_returns (pd.Series): A pandas Series containing stock returns.
-        bond_returns (pd.Series): A pandas Series containing bond returns.
-        start_date (datetime): The starting date of the investment.
-        current_date (datetime): The current date for calculating the portfolio's value.
-        stocks (float): The percentage of the portfolio allocated to stocks.
-        bonds (float): The percentage of the portfolio allocated to bonds.
-        cash (float): The percentage of the portfolio held in cash.
-    """
-
-    def __init__(self, initial_funds: dict, stock_returns: pd.Series, bond_returns: pd.Series, start_date: datetime):
+    def __init__(self, initial_funds: dict, return_series: dict, start_date: datetime):
         """
         The constructor for BalancedPortfolio class.
 
         Parameters:
-            initial_funds (dict): Initial funds distribution.
-            stock_returns (pd.Series): Series of stock returns.
-            bond_returns (pd.Series): Series of bond returns.
+            initial_funds (dict): Initial funds distribution for each ticker.
+            return_series (dict): Dictionary where each key is a ticker and value is a pandas Series of returns.
             start_date (datetime): Starting date of the investment.
         """
         self.funds = initial_funds
-        self.stock_returns = stock_returns
-        self.bond_returns = bond_returns
+        self.return_series = return_series
         self.start_date = start_date
         self.current_date = start_date
-        self.stocks = 0.0
-        self.bonds = 0.0
-        self.cash = 100.0  # Initially, 100% of the portfolio is in cash
+        self.allocations = {ticker: 0.0 for ticker in initial_funds}  # Initialize allocations to 0% for each ticker
 
-    def allocate(self, stocks_percent, bonds_percent):
+    def allocate(self, allocations):
         """
-        Allocates the portfolio among stocks, bonds, and cash.
+        Allocates the portfolio among various tickers.
 
         Parameters:
-            stocks_percent (float): The percentage of the portfolio to allocate to stocks.
-            bonds_percent (float): The percentage of the portfolio to allocate to bonds.
+            allocations (dict): A dictionary of allocations for each ticker.
 
         Raises:
             ValueError: If the total allocation exceeds 100%.
         """
-        if stocks_percent + bonds_percent > 100:
+        if sum(allocations.values()) > 100:
             raise ValueError("Total allocation exceeds 100%")
-        self.stocks = stocks_percent
-        self.bonds = bonds_percent
-        self.cash = 100 - stocks_percent - bonds_percent  # Remaining percentage is allocated to cash
+        
+        self.allocations = allocations
+
+        # # Calculate the initial allocation of funds based on the set percentages
+        # total_funds = sum(self.funds.values())  # Include cash in the total funds
+        # for ticker, percentage in allocations.items():
+        #     self.funds[ticker] = total_funds * percentage / 100
+
+        # # Adjust the cash value based on the allocated amounts
+        # self.funds['cash'] = total_funds - sum(self.funds[ticker] for ticker in allocations)
 
     def rebalance(self):
         """
@@ -58,9 +46,8 @@ class BalancedPortfolio():
         This is typically called after the market values have changed.
         """
         total_value = self.get_total_value()
-        self.funds['stocks'] = total_value * self.stocks / 100
-        self.funds['bonds'] = total_value * self.bonds / 100
-        self.funds['cash'] = total_value * self.cash / 100
+        for ticker in self.funds:
+            self.funds[ticker] = total_value * self.allocations.get(ticker, 0) / 100
 
     def update_date(self, new_date):
         """
@@ -73,25 +60,21 @@ class BalancedPortfolio():
 
     def get_total_value(self):
         """
-        Calculates the total value of the portfolio including stocks, bonds, and cash.
+        Calculates the total value of the portfolio for all tickers.
 
         Returns:
             float: The total value of the portfolio.
         """
-        # Localize the time zones of the return series to None for consistency
-        if self.stock_returns.index.tz is not None:
-            self.stock_returns.index = self.stock_returns.index.tz_localize(None)
-        if self.bond_returns.index.tz is not None:
-            self.bond_returns.index = self.bond_returns.index.tz_localize(None)
+        total_value = 0
+        for ticker, returns in self.return_series.items():
+            # Localize the time zones of the return series to None for consistency
+            if returns.index.tz is not None:
+                returns.index = returns.index.tz_localize(None)
 
-        # Select the right return value from the series up to the current date
-        current_stock_growth = self.stock_returns.loc[:self.current_date].iloc[-1]
-        current_bond_growth = self.bond_returns.loc[:self.current_date].iloc[-1]
-
-        # Calculate the current value of stocks and bonds in the portfolio
-        current_stocks_value = self.funds['stocks'] * (1 + current_stock_growth)
-        current_bonds_value = self.funds['bonds'] * (1 + current_bond_growth)
-        return current_stocks_value + current_bonds_value + self.funds['cash']
+            # Select the right return value from the series up to the current date
+            current_growth = returns.loc[:self.current_date].iloc[-1] if not returns.empty else 0
+            total_value += self.funds.get(ticker, 0) * (1 + current_growth)
+        return total_value + self.funds['cash']
 
     def __str__(self):
         """
@@ -100,9 +83,10 @@ class BalancedPortfolio():
         Returns:
             str: A string showing the portfolio allocation and total value.
         """
-        return f"Portfolio Allocation: {self.stocks}% Stocks, {self.bonds}% Bonds, {self.cash}% Cash, Total Value: {self.get_total_value():.2f}"
+        allocation_str = ', '.join([f"{ticker}: {alloc}%" for ticker, alloc in self.allocations.items()])
+        return f"Portfolio Allocation: {allocation_str}, Total Value: {self.get_total_value():.2f}"
 
-def calculate_returns(hist_data, adjclose=False):
+def calculate_returns(hist_data, adjclose=True):
     """
     Calculates various types of returns for a given historical data.
 
