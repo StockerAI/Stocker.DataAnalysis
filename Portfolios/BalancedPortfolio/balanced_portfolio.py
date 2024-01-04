@@ -32,14 +32,6 @@ class BalancedPortfolio():
         
         self.allocations = allocations
 
-        # # Calculate the initial allocation of funds based on the set percentages
-        # total_funds = sum(self.funds.values())  # Include cash in the total funds
-        # for ticker, percentage in allocations.items():
-        #     self.funds[ticker] = total_funds * percentage / 100
-
-        # # Adjust the cash value based on the allocated amounts
-        # self.funds['cash'] = total_funds - sum(self.funds[ticker] for ticker in allocations)
-
     def rebalance(self):
         """
         Rebalances the portfolio to maintain the allocation ratios.
