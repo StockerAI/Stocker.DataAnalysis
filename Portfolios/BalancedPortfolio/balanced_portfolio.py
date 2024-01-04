@@ -48,31 +48,29 @@ class BalancedPortfolio():
         return f"Portfolio Allocation: {self.stocks}% Stocks, {self.bonds}% Bonds, {self.cash}% Cash, Total Value: {self.get_total_value():.2f}"
 
 
-def calculate_returns(hist_data):
+def calculate_returns(hist_data, adjclose=False):
     # Ensure the data is sorted by date
     hist_data = hist_data.sort_index()
 
+    if adjclose:
+        # Adjust for dividends
+        total_return_data = hist_data['adjclose']
+    else:
+        # Only consider price changes
+        total_return_data = hist_data['close']
+
     # Full Return
-    start_price = hist_data['close'].iloc[0]
-    end_price = hist_data['close'].iloc[-1]
-    full_return = (end_price / start_price) - 1
-    # Creating a single-value Series for full return
+    start_value = total_return_data.iloc[0]
+    end_value = total_return_data.iloc[-1]
+    full_return = (end_value / start_value) - 1
     full_return_series = pd.Series([full_return], index=[hist_data.index[-1]])
 
-    # Annualized Return
-    annualized_return = hist_data['close'].resample('Y').ffill().pct_change()
-
-    # Quarterly Return
-    quarterly_returns = hist_data['close'].resample('Q').ffill().pct_change()
-
-    # Monthly Return
-    monthly_returns = hist_data['close'].resample('M').ffill().pct_change()
-
-    # Weekly Return
-    weekly_returns = hist_data['close'].resample('W').ffill().pct_change()
-
-    # Daily Return
-    daily_returns = hist_data['close'].pct_change()
+    # Other Returns
+    annualized_return = total_return_data.resample('Y').ffill().pct_change()
+    quarterly_returns = total_return_data.resample('Q').ffill().pct_change()
+    monthly_returns = total_return_data.resample('M').ffill().pct_change()
+    weekly_returns = total_return_data.resample('W').ffill().pct_change()
+    daily_returns = total_return_data.pct_change()
 
     return {
         'full_return': full_return_series,
@@ -82,4 +80,3 @@ def calculate_returns(hist_data):
         'weekly_returns': weekly_returns,
         'daily_returns': daily_returns
     }
-

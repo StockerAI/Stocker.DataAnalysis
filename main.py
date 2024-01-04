@@ -19,11 +19,11 @@ def main():
     agg_data = agg_data.set_index('date')
 
     # Calculate annualized returns
-    aapl_return = calculate_returns(aapl_data)['full_return']
+    aapl_return = calculate_returns(aapl_data, adjclose=True)['full_return']
     aapl_returns = calculate_returns(aapl_data)
     # print(aapl_returns['full_return'])
 
-    agg_return = calculate_returns(agg_data)['full_return']
+    agg_return = calculate_returns(agg_data, adjclose=True)['full_return']
     agg_returns = calculate_returns(agg_data)
     # print(agg_returns['full_return'])
 
