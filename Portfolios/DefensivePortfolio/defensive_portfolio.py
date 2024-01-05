@@ -1,34 +1,34 @@
-class DefensivePortfolio:
-    def __init__(self, initial_funds):
-        self.funds = initial_funds
-        self.bonds = 0.0  # Percentage of funds in bonds
-        self.defensive_stocks = 0.0  # Percentage of funds in defensive stocks
-        self.cash = 100.0  # Percentage of funds in cash
+from ..base_portfolio import BasePortfolio
+from datetime import datetime
+import Constants.investment_vehicles as IV
 
-    def allocate(self, bonds_percent, defensive_stocks_percent):
-        """ Allocate funds into bonds and defensive stocks based on given percentages. """
-        if bonds_percent + defensive_stocks_percent > 100:
-            raise ValueError("Total allocation exceeds 100%")
+class DefensivePortfolio(BasePortfolio):
+    def __init__(self, initial_funds: dict, return_series: dict, start_date: datetime, asset_types: dict):
+        super().__init__(initial_funds, return_series, start_date)
+        self.asset_types = asset_types
+        self.allocate_defensive()
 
-        self.bonds = bonds_percent
-        self.defensive_stocks = defensive_stocks_percent
-        self.cash = 100 - bonds_percent - defensive_stocks_percent
+    def allocate_defensive(self):
+        # Define the allocation ratio for each asset type in a defensive strategy
+        asset_allocation_ratios = {IV.STOCK: 0.15,
+                                   IV.BOND: 0.70,
+                                   IV.CASH or IV.CASH_EQUIVALENT: 0.10,
+                                   IV.COMODITY: 0.05}
 
-    def rebalance(self):
-        """ Rebalance the portfolio to maintain the allocation percentages. """
-        total_value = self.get_total_value()
-        self.funds['bonds'] = total_value * self.bonds / 100
-        self.funds['defensive_stocks'] = total_value * self.defensive_stocks / 100
-        self.funds['cash'] = total_value * self.cash / 100
+        # Calculate the actual allocation ratios based on available asset types
+        actual_ratios = {atype: ratio for atype, ratio in asset_allocation_ratios.items() if any(t == atype for t in self.asset_types.values())}
+        total_actual_ratio = sum(actual_ratios.values())
 
-    def get_total_value(self):
-        """ Calculate the total value of the portfolio. """
-        return sum(self.funds.values())
+        # Adjust the allocation ratios to sum up to 100%
+        adjusted_ratios = {atype: (ratio / total_actual_ratio) * 100 for atype, ratio in actual_ratios.items()}
 
-    def __str__(self):
-        return f"Portfolio Allocation: {self.bonds}% Bonds, {self.defensive_stocks}% Defensive Stocks, {self.cash}% Cash"
+        defensive_allocations = {}
+        for ticker, ticker_asset_type in self.asset_types.items():
+            if ticker_asset_type in adjusted_ratios:
+                # Count how many tickers are there for each asset type
+                num_tickers = sum(1 for t in self.asset_types.values() if t == ticker_asset_type)
+                
+                # Distribute the allocation for this asset type evenly among its tickers
+                defensive_allocations[ticker] = (adjusted_ratios[ticker_asset_type] / num_tickers)
 
-# Example Usage:
-portfolio = DefensivePortfolio(initial_funds={'bonds': 10000, 'defensive_stocks': 8000, 'cash': 12000})
-portfolio.allocate(bonds_percent=40, defensive_stocks_percent=35)
-print(portfolio)
+        self.allocate(defensive_allocations)
