@@ -1,5 +1,7 @@
 import pandas
-from datetime import datetime
+import datetime
+from dateutil.relativedelta import relativedelta
+import Constants.rebalance_date_options as RDO
 
 class BasePortfolio():
     def __init__(self, initial_funds: dict, return_series: dict, start_date: datetime.date):
@@ -121,3 +123,32 @@ def calculate_returns(hist_data, adjclose=True):
         'weekly_returns': weekly_returns,
         'daily_returns': daily_returns
     }
+
+def generate_rebalance_dates(start_date, end_date, frequency=RDO.NEVER):
+    if frequency == RDO.NEVER:
+        return [end_date]  # Only the end date for 'NEVER' frequency
+
+    frequencies = {
+        RDO.MONTHLY: relativedelta(months=+1),
+        RDO.QUARTERLY: relativedelta(months=+3),
+        RDO.SEMI_ANNUALLY: relativedelta(months=+6),
+        RDO.ANNUALLY: relativedelta(years=+1)
+    }
+    delta = frequencies.get(frequency)
+    dates = []
+    current_date = start_date
+    while current_date <= end_date:
+        if delta:  # Adjust to get the last day of the month for all frequencies except 'never'
+            current_date = last_day_of_month(current_date)
+        dates.append(current_date)
+        if delta is None:  # Should not reach here for 'never', but just as a safeguard
+            break
+        current_date += delta
+    if end_date not in dates:
+        dates.append(end_date)
+    return dates
+
+def last_day_of_month(any_day):
+    """Return the last day of the month of any_day"""
+    next_month = any_day.replace(day=28) + datetime.timedelta(days=4)
+    return next_month - datetime.timedelta(days=next_month.day)

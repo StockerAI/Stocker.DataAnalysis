@@ -6,41 +6,12 @@ import Constants.stock_markets as SM
 import Constants.rebalance_date_options as RDO
 from api_calls import get_stocks
 from Portfolios.BalancedPortfolio.balanced_portfolio import BalancedPortfolio
-from Portfolios.base_portfolio import calculate_returns
-
-def last_day_of_month(any_day):
-    """Return the last day of the month of any_day"""
-    next_month = any_day.replace(day=28) + datetime.timedelta(days=4)
-    return next_month - datetime.timedelta(days=next_month.day)
-
-def generate_rebalance_dates(start_date, end_date, frequency=RDO.NEVER):
-    if frequency == RDO.NEVER:
-        return [end_date]  # Only the end date for 'NEVER' frequency
-
-    frequencies = {
-        RDO.MONTHLY: relativedelta(months=+1),
-        RDO.QUARTERLY: relativedelta(months=+3),
-        RDO.SEMI_ANNUALLY: relativedelta(months=+6),
-        RDO.ANNUALLY: relativedelta(years=+1)
-    }
-    delta = frequencies.get(frequency)
-    dates = []
-    current_date = start_date
-    while current_date <= end_date:
-        if delta:  # Adjust to get the last day of the month for all frequencies except 'never'
-            current_date = last_day_of_month(current_date)
-        dates.append(current_date)
-        if delta is None:  # Should not reach here for 'never', but just as a safeguard
-            break
-        current_date += delta
-    # if end_date not in dates:
-    #     dates.append(end_date)
-    return dates
+from Portfolios.base_portfolio import calculate_returns, generate_rebalance_dates
 
 def main():
-    initial_start_date = datetime.date(2018, 12, 31)
-    end_date = datetime.date(2019, 12, 31)
-    rebalance_frequency = RDO.MONTHLY
+    initial_start_date = datetime.date(2021, 12, 31)
+    end_date = datetime.date(2022, 7, 31)
+    rebalance_frequency = RDO.SEMI_ANNUALLY
 
     rebalance_dates = generate_rebalance_dates(initial_start_date, end_date, rebalance_frequency)
 
