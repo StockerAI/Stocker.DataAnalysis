@@ -2,14 +2,14 @@ import pandas
 from datetime import datetime
 
 class BasePortfolio():
-    def __init__(self, initial_funds: dict, return_series: dict, start_date: datetime):
+    def __init__(self, initial_funds: dict, return_series: dict, start_date: datetime.date):
         """
         The constructor for BasePortfolio class.
 
         Parameters:
             initial_funds (dict): Initial funds distribution for each ticker.
             return_series (dict): Dictionary where each key is a ticker and value is a pandas Series of returns.
-            start_date (datetime): Starting date of the investment.
+            start_date (datetime.date): Starting date of the investment.
         """
         self.funds = initial_funds
         self.return_series = return_series
@@ -46,7 +46,7 @@ class BasePortfolio():
         Updates the current date of the portfolio.
 
         Parameters:
-            new_date (datetime): The new current date for the portfolio.
+            new_date (datetime.date): The new current date for the portfolio.
         """
         self.current_date = new_date
 
@@ -59,10 +59,6 @@ class BasePortfolio():
         """
         total_value = 0
         for ticker, returns in self.return_series.items():
-            # Localize the time zones of the return series to None for consistency
-            if returns.index.tz is not None:
-                returns.index = returns.index.tz_localize(None)
-
             # Select the right return value from the series up to the current date
             current_growth = returns.loc[:self.current_date].iloc[-1] if not returns.empty else 0
             total_value += self.funds.get(ticker, 0) * (1 + current_growth)
@@ -99,6 +95,9 @@ def calculate_returns(hist_data, adjclose=True):
     else:
         # Only consider price changes
         total_return_data = hist_data['close']
+    
+    if not isinstance(hist_data.index, pandas.DatetimeIndex):
+        total_return_data.index = pandas.to_datetime(total_return_data.index)
 
     # Calculate full return from start to end
     start_value = total_return_data.iloc[0]

@@ -3,7 +3,7 @@ from datetime import datetime
 import Constants.investment_vehicles as IV
 
 class DefensivePortfolio(BasePortfolio):
-    def __init__(self, initial_funds: dict, return_series: dict, start_date: datetime, asset_types: dict):
+    def __init__(self, initial_funds: dict, return_series: dict, start_date: datetime.date, asset_types: dict):
         super().__init__(initial_funds, return_series, start_date)
         self.asset_types = asset_types
         self.allocate_defensive()

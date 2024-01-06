@@ -1,0 +1,5 @@
+MONTHLY = "monthly"
+QUARTERLY = "quarterly"
+SEMI_ANNUALLY = "semi annually"
+ANNUALLY = "annually"
+NEVER = "never"
