@@ -10,7 +10,7 @@ from Portfolios.base_portfolio import calculate_returns, generate_rebalance_date
 
 def main():
     initial_start_date = datetime.date(2021, 12, 31)
-    end_date = datetime.date(2022, 7, 31)
+    end_date = datetime.date(2022, 8, 31)
     rebalance_frequency = RDO.SEMI_ANNUALLY
 
     rebalance_dates = generate_rebalance_dates(initial_start_date, end_date, rebalance_frequency)
