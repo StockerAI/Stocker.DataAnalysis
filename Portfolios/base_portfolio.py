@@ -1,4 +1,5 @@
 import pandas
+import numpy
 import datetime
 from dateutil.relativedelta import relativedelta
 import Constants.rebalance_date_options as RDO
@@ -62,9 +63,108 @@ class BasePortfolio():
         total_value = 0
         for ticker, returns in self.return_series.items():
             # Select the right return value from the series up to the current date
-            current_growth = returns.loc[:self.current_date].iloc[-1] if not returns.empty else 0
+            current_growth = returns["full_return"].loc[:self.current_date].iloc[-1] if not returns["full_return"].empty else 0
             total_value += self.funds.get(ticker, 0) * (1 + current_growth)
-        return total_value + self.funds['cash']
+        return total_value + self.funds["cash"]
+    
+    def get_return_percentage(self):
+        """
+        Calculates the return of the portfolio as a percentage.
+
+        Returns:
+            float: The return percentage of the portfolio.
+        """
+        initial_value = sum(self.funds.values())
+        current_value = self.get_total_value()
+        return ((current_value - initial_value) / initial_value) * 100
+
+    def get_cagr(self):
+            """
+            Calculates the Compound Annual Growth Rate (CAGR) of the portfolio.
+
+            Returns:
+                float: The CAGR of the portfolio.
+            """
+            starting_value = sum(self.funds.values())
+            ending_value = self.get_total_value()
+            total_years = (self.current_date - self.start_date).days / 365.25
+
+            if starting_value <= 0 or total_years <= 0:
+                return 0  # Avoid division by zero or negative values
+
+            return ((ending_value / starting_value) ** (1 / total_years) - 1) * 100
+
+    def get_stdev_percentage(self):
+        """
+        Calculates the standard deviation of the portfolio's daily returns as a percentage.
+
+        Returns:
+            float: The standard deviation of the daily returns.
+        """
+        all_daily_returns = list()
+
+        # Aggregate daily returns from each ticker
+        for _, returns_dict in self.return_series.items():
+            # Extract daily returns for this ticker
+            daily_returns = returns_dict.get("monthly_returns", []).dropna()
+            
+            # Append to the list of all daily returns
+            all_daily_returns.extend(daily_returns)
+
+        # Calculate and return the standard deviation
+        return numpy.std(all_daily_returns, ddof=1) * 100  # Using ddof=1 for sample standard deviation
+    
+    def get_max_drawdown_percentage(self):
+        """
+        Calculates the maximum drawdown of the portfolio as a percentage.
+
+        Returns:
+            float: The maximum drawdown percentage of the portfolio.
+        """
+        cumulative_returns = 0
+        for ticker, returns_dict in self.return_series.items():
+            # Get monthly returns up to the current date
+            monthly_returns = returns_dict["monthly_returns"].loc[:self.current_date]
+            
+            # Calculate cumulative returns for this ticker
+            cumulative_returns += (1 + monthly_returns).cumprod() * self.funds.get(ticker, 0)
+
+        # Calculate drawdowns
+        peak = cumulative_returns.cummax()
+        drawdowns = (cumulative_returns - peak) / peak
+
+        # Max drawdown
+        max_drawdown = drawdowns.min()  # Since drawdowns are negative, min() gives the max drawdown
+        return abs(max_drawdown) * 100
+
+    # def get_sharpe_ratio(self, risk_free_rate):
+    #     """
+    #     Calculates the Sharpe Ratio of the portfolio.
+
+    #     Parameters:
+    #         risk_free_rate (float): The risk-free rate.
+
+    #     Returns:
+    #         float: The Sharpe Ratio of the portfolio.
+    #     """
+    #     portfolio_return = self.get_return_percentage() / 100
+    #     stdev = self.get_stdev_percentage() / 100
+    #     return (portfolio_return - risk_free_rate) / stdev
+
+    # def get_sortino_ratio(self, risk_free_rate):
+    #     """
+    #     Calculates the Sortino Ratio of the portfolio.
+
+    #     Parameters:
+    #         risk_free_rate (float): The risk-free rate.
+
+    #     Returns:
+    #         float: The Sortino Ratio of the portfolio.
+    #     """
+    #     portfolio_return = self.get_return_percentage() / 100
+    #     negative_returns = [return_ for return_ in self.get_daily_returns() if return_ < 0]
+    #     downside_deviation = numpy.std(negative_returns)
+    #     return (portfolio_return - risk_free_rate) / downside_deviation
 
     def __str__(self):
         """
@@ -73,7 +173,7 @@ class BasePortfolio():
         Returns:
             str: A string showing the portfolio allocation and total value.
         """
-        allocation_str = ', '.join([f"{ticker}: {alloc}%" for ticker, alloc in self.allocations.items()])
+        allocation_str = ", ".join([f"{ticker}: {alloc}%" for ticker, alloc in self.allocations.items()])
         return f"Portfolio Allocation: {allocation_str}, Total Value: {self.get_total_value():.2f}"
 
 def calculate_returns(hist_data, adjclose=True):
@@ -93,10 +193,10 @@ def calculate_returns(hist_data, adjclose=True):
     # Choose between adjusted close prices or raw close prices
     if adjclose:
         # Adjust for dividends
-        total_return_data = hist_data['adjclose']
+        total_return_data = hist_data["adjclose"]
     else:
         # Only consider price changes
-        total_return_data = hist_data['close']
+        total_return_data = hist_data["close"]
     
     if not isinstance(hist_data.index, pandas.DatetimeIndex):
         total_return_data.index = pandas.to_datetime(total_return_data.index)
@@ -108,25 +208,25 @@ def calculate_returns(hist_data, adjclose=True):
     full_return_series = pandas.Series([full_return], index=[hist_data.index[-1]])
 
     # Calculate other types of returns
-    annualized_return = total_return_data.resample('Y').ffill().pct_change()
-    quarterly_returns = total_return_data.resample('Q').ffill().pct_change()
-    monthly_returns = total_return_data.resample('M').ffill().pct_change()
-    weekly_returns = total_return_data.resample('W').ffill().pct_change()
+    annualized_returns = total_return_data.resample("Y").ffill().pct_change()
+    quarterly_returns = total_return_data.resample("Q").ffill().pct_change()
+    monthly_returns = total_return_data.resample("M").ffill().pct_change()
+    weekly_returns = total_return_data.resample("W").ffill().pct_change()
     daily_returns = total_return_data.pct_change()
 
     # Return a dictionary containing all the calculated returns
     return {
-        'full_return': full_return_series,
-        'annualized_return': annualized_return,
-        'quarterly_returns': quarterly_returns,
-        'monthly_returns': monthly_returns,
-        'weekly_returns': weekly_returns,
-        'daily_returns': daily_returns
+        "full_return": full_return_series,
+        "annualized_returns": annualized_returns,
+        "quarterly_returns": quarterly_returns,
+        "monthly_returns": monthly_returns,
+        "weekly_returns": weekly_returns,
+        "daily_returns": daily_returns
     }
 
 def generate_rebalance_dates(start_date, end_date, frequency=RDO.NEVER):
     if frequency == RDO.NEVER:
-        return [end_date]  # Only the end date for 'NEVER' frequency
+        return [end_date]  # Only the end date for "NEVER" frequency
 
     frequencies = {
         RDO.MONTHLY: relativedelta(months=+1),
@@ -138,10 +238,10 @@ def generate_rebalance_dates(start_date, end_date, frequency=RDO.NEVER):
     dates = []
     current_date = start_date
     while current_date <= end_date:
-        if delta:  # Adjust to get the last day of the month for all frequencies except 'never'
+        if delta:  # Adjust to get the last day of the month for all frequencies except "never"
             current_date = last_day_of_month(current_date)
         dates.append(current_date)
-        if delta is None:  # Should not reach here for 'never', but just as a safeguard
+        if delta is None:  # Should not reach here for "never", but just as a safeguard
             break
         current_date += delta
     if end_date not in dates:
