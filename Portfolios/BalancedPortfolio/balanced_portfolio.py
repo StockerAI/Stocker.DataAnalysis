@@ -3,8 +3,8 @@ from datetime import datetime
 import Constants.investment_vehicles as IV
 
 class BalancedPortfolio(BasePortfolio):
-    def __init__(self, initial_funds: dict, return_series: dict, start_date: datetime.date, asset_types: dict):
-        super().__init__(initial_funds, return_series, start_date)
+    def __init__(self, initial_funds: dict, return_series: dict, start_date: datetime.date, end_date: datetime.date, rebalance_frequency: str, asset_types: dict):
+        super().__init__(initial_funds, return_series, start_date, end_date, rebalance_frequency)
         self.asset_types = asset_types  # Store the asset types
         self.allocate_balanced()
 

@@ -2,10 +2,10 @@ import pandas
 import numpy
 import datetime
 from dateutil.relativedelta import relativedelta
-import Constants.rebalance_date_options as RDO
+from Constants.rebalance_date_options import RDO
 
 class BasePortfolio():
-    def __init__(self, initial_funds: dict, return_series: dict, start_date: datetime.date):
+    def __init__(self, initial_funds: dict, return_series: dict, start_date: datetime.date, end_date: datetime.date, rebalance_frequency=RDO["NEVER"]):
         """
         The constructor for BasePortfolio class.
 
@@ -13,12 +13,19 @@ class BasePortfolio():
             initial_funds (dict): Initial funds distribution for each ticker.
             return_series (dict): Dictionary where each key is a ticker and value is a pandas Series of returns.
             start_date (datetime.date): Starting date of the investment.
+            end_date (datetime.date): Ending date of the investment.
+            rebalance_frequency (str): Frequency of rebalancing.
         """
         self.funds = initial_funds
         self.return_series = return_series
         self.start_date = start_date
         self.current_date = start_date
+        self.end_date = end_date
+        self.rebalance_frequency = rebalance_frequency
+        self.rebalance_dates = self.generate_rebalance_dates()
         self.allocations = {ticker: 0.0 for ticker in initial_funds}  # Initialize allocations to 0% for each ticker
+        self.final_returns = dict()
+        self.final_returns[self.start_date] = initial_funds["cash"]
 
     def allocate(self, allocations):
         """
@@ -35,25 +42,57 @@ class BasePortfolio():
         
         self.allocations = allocations
 
+    def balance(self, initial_cash):
+        """
+        Initial balance of the portfolio.
+        Represents the first day of depositing the money into the market.
+        """
+        for ticker in self.funds:
+            self.funds[ticker] = initial_cash * self.allocations.get(ticker, 0) / 100
+        self.final_returns[self.end_date] = self.get_total_value(returns_type=self.rebalance_frequency["returns"], until=self.end_date)
+
     def rebalance(self):
         """
         Rebalances the portfolio to maintain the allocation ratios.
         This is typically called after the market values have changed.
         """
-        total_value = self.get_total_value()
-        for ticker in self.funds:
-            self.funds[ticker] = total_value * self.allocations.get(ticker, 0) / 100
+        for date in self.rebalance_dates:
+            balance_per_period = self.get_total_value(returns_type=self.rebalance_frequency["returns"], until=date)
+            self.balance(balance_per_period)
+            self.final_returns[date] = balance_per_period
 
-    def update_date(self, new_date):
+    def generate_rebalance_dates(self):
         """
-        Updates the current date of the portfolio.
+        Generates a list of rebalance dates based on the specified frequency.
 
-        Parameters:
-            new_date (datetime.date): The new current date for the portfolio.
+        Returns:
+            list: A list of rebalance dates.
         """
-        self.current_date = new_date
+        if self.rebalance_frequency == RDO["NEVER"]["name"]:
+            return [self.end_date]  # Only the end date for "NEVER" frequency
 
-    def get_total_value(self):
+        frequencies = {
+            RDO["MONTHLY"]["name"]: relativedelta(months=+1),
+            RDO["QUARTERLY"]["name"]: relativedelta(months=+3),
+            RDO["SEMI_ANNUALLY"]["name"]: relativedelta(months=+6),
+            RDO["ANNUALLY"]["name"]: relativedelta(years=+1)
+        }
+        delta = frequencies.get(self.rebalance_frequency["name"])
+        dates = []
+        current_date = self.start_date
+        while current_date <= self.end_date:
+            if delta:  # Adjust to get the last day of the month for all frequencies except "never"
+                current_date = last_day_of_month(current_date)
+            if current_date != self.start_date:
+                dates.append(current_date)
+            if delta is None:  # Should not reach here for "never", but just as a safeguard
+                break
+            current_date += delta
+        if self.end_date not in dates:
+            dates.append(self.end_date)
+        return dates
+    
+    def get_total_value(self, returns_type, until):
         """
         Calculates the total value of the portfolio for all tickers.
 
@@ -62,119 +101,53 @@ class BasePortfolio():
         """
         total_value = 0
         for ticker, returns in self.return_series.items():
-            # Select the right return value from the series up to the current date
-            current_growth = returns["full_return"].loc[:self.current_date].iloc[-1] if not returns["full_return"].empty else 0
+            current_growth = returns[returns_type].loc[datetime.datetime.combine(until, datetime.time())] if not returns[returns_type].empty else 0
             total_value += self.funds.get(ticker, 0) * (1 + current_growth)
         return total_value + self.funds["cash"]
     
-    def get_return_percentage(self):
+    def calculate_cagr(self):
         """
-        Calculates the return of the portfolio as a percentage.
-
-        Returns:
-            float: The return percentage of the portfolio.
+        Calculates the Compound Annual Growth Rate (CAGR) of the portfolio.
         """
-        initial_value = sum(self.funds.values())
-        current_value = self.get_total_value()
-        return ((current_value - initial_value) / initial_value) * 100
+        years = (self.end_date - self.start_date).days / 365.25
+        start_value = list(self.final_returns.values())[0]
+        end_value = list(self.final_returns.values())[1]
+        return (end_value / start_value) ** (1 / years) - 1
 
-    def get_cagr(self):
-            """
-            Calculates the Compound Annual Growth Rate (CAGR) of the portfolio.
+    # def calculate_stdev(self):
+    #     """
+    #     Calculates the standard deviation of the portfolio returns.
+    #     """
+    #     returns = []
+    #     for returns_series in self.return_series.values():
+    #         print(returns_series[self.rebalance_frequency["returns"]])
+    #         returns.extend(returns_series[self.rebalance_frequency["returns"]])
+    #     return numpy.std(returns)
 
-            Returns:
-                float: The CAGR of the portfolio.
-            """
-            starting_value = sum(self.funds.values())
-            ending_value = self.get_total_value()
-            total_years = (self.current_date - self.start_date).days / 365.25
-
-            if starting_value <= 0 or total_years <= 0:
-                return 0  # Avoid division by zero or negative values
-
-            return ((ending_value / starting_value) ** (1 / total_years) - 1) * 100
-
-    def get_stdev_percentage(self):
-        """
-        Calculates the standard deviation of the portfolio's daily returns as a percentage.
-
-        Returns:
-            float: The standard deviation of the daily returns.
-        """
-        all_daily_returns = list()
-
-        # Aggregate daily returns from each ticker
-        for _, returns_dict in self.return_series.items():
-            # Extract daily returns for this ticker
-            daily_returns = returns_dict.get("monthly_returns", []).dropna()
-            
-            # Append to the list of all daily returns
-            all_daily_returns.extend(daily_returns)
-
-        # Calculate and return the standard deviation
-        return numpy.std(all_daily_returns, ddof=1) * 100  # Using ddof=1 for sample standard deviation
+    # def calculate_max_drawdown(self):
+    #     """
+    #     Calculates the maximum drawdown of the portfolio.
+    #     """
+    #     values = [self.get_total_value(returns_type=self.rebalance_frequency["returns"], until=date) for date in self.rebalance_dates]
+    #     peak = values[0]
+    #     max_drawdown = 0
+    #     for value in values:
+    #         if value > peak:
+    #             peak = value
+    #         drawdown = (peak - value) / peak
+    #         max_drawdown = max(max_drawdown, drawdown)
+    #     return max_drawdown
     
-    def get_max_drawdown_percentage(self):
-        """
-        Calculates the maximum drawdown of the portfolio as a percentage.
-
-        Returns:
-            float: The maximum drawdown percentage of the portfolio.
-        """
-        cumulative_returns = 0
-        for ticker, returns_dict in self.return_series.items():
-            # Get monthly returns up to the current date
-            monthly_returns = returns_dict["monthly_returns"].loc[:self.current_date]
-            
-            # Calculate cumulative returns for this ticker
-            cumulative_returns += (1 + monthly_returns).cumprod() * self.funds.get(ticker, 0)
-
-        # Calculate drawdowns
-        peak = cumulative_returns.cummax()
-        drawdowns = (cumulative_returns - peak) / peak
-
-        # Max drawdown
-        max_drawdown = drawdowns.min()  # Since drawdowns are negative, min() gives the max drawdown
-        return abs(max_drawdown) * 100
-
-    # def get_sharpe_ratio(self, risk_free_rate):
-    #     """
-    #     Calculates the Sharpe Ratio of the portfolio.
-
-    #     Parameters:
-    #         risk_free_rate (float): The risk-free rate.
-
-    #     Returns:
-    #         float: The Sharpe Ratio of the portfolio.
-    #     """
-    #     portfolio_return = self.get_return_percentage() / 100
-    #     stdev = self.get_stdev_percentage() / 100
-    #     return (portfolio_return - risk_free_rate) / stdev
-
-    # def get_sortino_ratio(self, risk_free_rate):
-    #     """
-    #     Calculates the Sortino Ratio of the portfolio.
-
-    #     Parameters:
-    #         risk_free_rate (float): The risk-free rate.
-
-    #     Returns:
-    #         float: The Sortino Ratio of the portfolio.
-    #     """
-    #     portfolio_return = self.get_return_percentage() / 100
-    #     negative_returns = [return_ for return_ in self.get_daily_returns() if return_ < 0]
-    #     downside_deviation = numpy.std(negative_returns)
-    #     return (portfolio_return - risk_free_rate) / downside_deviation
-
     def __str__(self):
         """
         String representation of the BasePortfolio object.
 
         Returns:
-            str: A string showing the portfolio allocation and total value.
+            str: A string showing the portfolio allocation and final returns.
         """
         allocation_str = ", ".join([f"{ticker}: {alloc}%" for ticker, alloc in self.allocations.items()])
-        return f"Portfolio Allocation: {allocation_str}, Total Value: {self.get_total_value():.2f}"
+        final_returns_str = "\n".join([f"{date.strftime('%Y-%m-%d')}: {value:.2f}" for date, value in self.final_returns.items()])
+        return f"Portfolio Allocation: {allocation_str}\nFinal Returns:\n{final_returns_str}"
 
 def calculate_returns(hist_data, adjclose=True):
     """
@@ -205,48 +178,31 @@ def calculate_returns(hist_data, adjclose=True):
     start_value = total_return_data.iloc[0]
     end_value = total_return_data.iloc[-1]
     full_return = (end_value / start_value) - 1
-    full_return_series = pandas.Series([full_return], index=[hist_data.index[-1]])
+    full_return_series = pandas.Series([full_return], index=[datetime.datetime.combine(hist_data.index[-1], datetime.time())])
 
     # Calculate other types of returns
-    annualized_returns = total_return_data.resample("Y").ffill().pct_change()
-    quarterly_returns = total_return_data.resample("Q").ffill().pct_change()
-    monthly_returns = total_return_data.resample("M").ffill().pct_change()
-    weekly_returns = total_return_data.resample("W").ffill().pct_change()
-    daily_returns = total_return_data.pct_change()
-
+    annually_returns = total_return_data.resample("Y").ffill().pct_change().fillna(0)
+    annually_returns.index = [*annually_returns.index[:-1], datetime.datetime.combine(hist_data.index[-1], datetime.time())]
+    semi_annually_returns = total_return_data.resample("6M").ffill().pct_change().fillna(0)
+    semi_annually_returns.index = [*semi_annually_returns.index[:-1], datetime.datetime.combine(hist_data.index[-1], datetime.time())]
+    quarterly_returns = total_return_data.resample("Q").ffill().pct_change().fillna(0)
+    quarterly_returns.index = [*quarterly_returns.index[:-1], datetime.datetime.combine(hist_data.index[-1], datetime.time())]
+    monthly_returns = total_return_data.resample("M").ffill().pct_change().fillna(0)
+    monthly_returns.index = [*monthly_returns.index[:-1], datetime.datetime.combine(hist_data.index[-1], datetime.time())]
+    weekly_returns = total_return_data.resample("W").ffill().pct_change().fillna(0)
+    weekly_returns.index = [*weekly_returns.index[:-1], datetime.datetime.combine(hist_data.index[-1], datetime.time())]
+    daily_returns = total_return_data.pct_change().fillna(0)
+    
     # Return a dictionary containing all the calculated returns
     return {
-        "full_return": full_return_series,
-        "annualized_returns": annualized_returns,
-        "quarterly_returns": quarterly_returns,
-        "monthly_returns": monthly_returns,
-        "weekly_returns": weekly_returns,
-        "daily_returns": daily_returns
+        RDO["NEVER"]["returns"]: full_return_series,
+        RDO["ANNUALLY"]["returns"]: annually_returns,
+        RDO["SEMI_ANNUALLY"]["returns"]: semi_annually_returns,
+        RDO["QUARTERLY"]["returns"]: quarterly_returns,
+        RDO["MONTHLY"]["returns"]: monthly_returns,
+        RDO["WEEKLY"]["returns"]: weekly_returns,
+        RDO["DAILY"]["returns"]: daily_returns
     }
-
-def generate_rebalance_dates(start_date, end_date, frequency=RDO.NEVER):
-    if frequency == RDO.NEVER:
-        return [end_date]  # Only the end date for "NEVER" frequency
-
-    frequencies = {
-        RDO.MONTHLY: relativedelta(months=+1),
-        RDO.QUARTERLY: relativedelta(months=+3),
-        RDO.SEMI_ANNUALLY: relativedelta(months=+6),
-        RDO.ANNUALLY: relativedelta(years=+1)
-    }
-    delta = frequencies.get(frequency)
-    dates = []
-    current_date = start_date
-    while current_date <= end_date:
-        if delta:  # Adjust to get the last day of the month for all frequencies except "never"
-            current_date = last_day_of_month(current_date)
-        dates.append(current_date)
-        if delta is None:  # Should not reach here for "never", but just as a safeguard
-            break
-        current_date += delta
-    if end_date not in dates:
-        dates.append(end_date)
-    return dates
 
 def last_day_of_month(any_day):
     """Return the last day of the month of any_day"""
