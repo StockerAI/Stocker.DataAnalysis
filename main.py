@@ -11,7 +11,7 @@ def main():
     # Set up initial parameters
     initial_start_date = datetime.date(2014, 12, 31)
     # end_date = datetime.date(2015, 1, 31)
-    end_date = datetime.date(2021, 12, 31)
+    end_date = datetime.date(2021, 4, 30)
     rebalance_frequency = RDO["ANNUALLY"]  # Set your desired rebalance frequency
 
     # Initial cash amount
