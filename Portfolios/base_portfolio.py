@@ -1,6 +1,7 @@
 import pandas
 import numpy
 import datetime
+import collections
 from dateutil.relativedelta import relativedelta
 from Constants.rebalance_date_options import RDO
 
@@ -110,33 +111,42 @@ class BasePortfolio():
         Calculates the Compound Annual Growth Rate (CAGR) of the portfolio.
         """
         years = (self.end_date - self.start_date).days / 365.25
-        start_value = list(self.final_returns.values())[0]
-        end_value = list(self.final_returns.values())[1]
+        values = collections.OrderedDict(sorted(self.final_returns.items()))
+        start_value = list(values.values())[0]
+        end_value = list(values.values())[-1]
         return (end_value / start_value) ** (1 / years) - 1
 
-    # def calculate_stdev(self):
-    #     """
-    #     Calculates the standard deviation of the portfolio returns.
-    #     """
-    #     returns = []
-    #     for returns_series in self.return_series.values():
-    #         print(returns_series[self.rebalance_frequency["returns"]])
-    #         returns.extend(returns_series[self.rebalance_frequency["returns"]])
-    #     return numpy.std(returns)
+    def calculate_stdev(self):
+        """
+        Calculates the standard deviation of the portfolio's total returns over time.
+        """
+        if not self.final_returns:
+            return 0
 
-    # def calculate_max_drawdown(self):
-    #     """
-    #     Calculates the maximum drawdown of the portfolio.
-    #     """
-    #     values = [self.get_total_value(returns_type=self.rebalance_frequency["returns"], until=date) for date in self.rebalance_dates]
-    #     peak = values[0]
-    #     max_drawdown = 0
-    #     for value in values:
-    #         if value > peak:
-    #             peak = value
-    #         drawdown = (peak - value) / peak
-    #         max_drawdown = max(max_drawdown, drawdown)
-    #     return max_drawdown
+        values = collections.OrderedDict(sorted(self.final_returns.items()))
+
+        # Extract return values from final_returns
+        returns = list(values.values())
+
+        # Calculate the percentage change in returns
+        pct_change_returns = [((returns[i] - returns[i-1]) / returns[i-1]) for i in range(1, len(returns))]
+
+        # Calculate standard deviation using numpy
+        return numpy.std(pct_change_returns)
+
+    def calculate_max_drawdown(self):
+        """
+        Calculates the maximum drawdown of the portfolio.
+        """
+        values = collections.OrderedDict(sorted(self.final_returns.items()))
+        peak = list(values.values())[0]  # Starting with the first value as the initial peak
+        max_drawdown = 0
+        for date, value in values.items():
+            if value > peak:
+                peak = value  # Update the peak if current value is higher
+            drawdown = (peak - value) / peak if peak != 0 else 0  # Calculate drawdown
+            max_drawdown = max(max_drawdown, drawdown)  # Update max_drawdown if current drawdown is higher
+        return max_drawdown
     
     def __str__(self):
         """

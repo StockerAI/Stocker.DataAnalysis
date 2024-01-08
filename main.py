@@ -11,8 +11,8 @@ def main():
     # Set up initial parameters
     initial_start_date = datetime.date(2014, 12, 31)
     # end_date = datetime.date(2015, 1, 31)
-    end_date = datetime.date(2021, 4, 30)
-    rebalance_frequency = RDO["ANNUALLY"]  # Set your desired rebalance frequency
+    end_date = datetime.date(2021, 5, 28)
+    rebalance_frequency = RDO["SEMI_ANNUALLY"]  # Set your desired rebalance frequency
 
     # Initial cash amount
     cash_initial = 10000
@@ -55,9 +55,9 @@ def main():
     portfolio.balance(cash_initial)
     portfolio.rebalance()
     print(portfolio)
-    print(portfolio.calculate_cagr())
-    # print(portfolio.calculate_stdev())
-    # print(portfolio.calculate_max_drawdown())
+    print(f"Calculation of {rebalance_frequency['name']} CAGR: {portfolio.calculate_cagr() * 100:.2f}%")
+    print(f"Calculation of {rebalance_frequency['name']} Stdev: {portfolio.calculate_stdev() * 100:.2f}%")
+    print(f"Calculation of {rebalance_frequency['name']} Max. Drawdown: {portfolio.calculate_max_drawdown() * 100:.2f}%")
 
 if __name__ == "__main__":
     main()

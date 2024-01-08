@@ -16,7 +16,7 @@ RDO = {
         "returns": "annually_returns"
     },
     "SEMI_ANNUALLY": {
-        "name": "semi_annually",
+        "name": "semi annually",
         "returns": "semi_annually_returns"
     },
     "QUARTERLY": {
