@@ -12,16 +12,20 @@ def main():
     initial_start_date = datetime.date(2014, 12, 31)
     # end_date = datetime.date(2015, 1, 31)
     end_date = datetime.date(2021, 5, 28)
-    rebalance_frequency = RDO["SEMI_ANNUALLY"]  # Set your desired rebalance frequency
+    rebalance_frequency = RDO["ANNUALLY"]  # Set your desired rebalance frequency
 
     # Initial cash amount
     cash_initial = 10000
 
     # Define tickers and their information
     tickers_info = {
-        "MSFT": {"stock_market": SM.SP500, "asset_type": IV.STOCK},
-        "AAPL": {"stock_market": SM.SP500, "asset_type": IV.STOCK},
-        "GOOG": {"stock_market": SM.SP500, "asset_type": IV.STOCK}
+        "VOO": {"stock_market": SM.OTHER, "investment_vehicle": IV.ETF},
+        "IJH": {"stock_market": SM.OTHER, "investment_vehicle": IV.ETF},
+        "VXUS": {"stock_market": SM.NASDAQ, "investment_vehicle": IV.ETF},
+        "BND": {"stock_market": SM.NASDAQ, "investment_vehicle": IV.ETF},
+        "BNDX": {"stock_market": SM.NASDAQ, "investment_vehicle": IV.ETF},
+        "VNQ": {"stock_market": SM.OTHER, "investment_vehicle": IV.ETF},
+        "GLD": {"stock_market": SM.OTHER, "investment_vehicle": IV.ETF},
         # Other tickers can be added here
     }
 
@@ -37,8 +41,8 @@ def main():
         ticker_data = ticker_data.set_index("date")
 
         if not ticker_data.empty:
-            full_return = calculate_returns(ticker_data, adjclose=False)
-            return_series[ticker] = full_return                
+            full_return = calculate_returns(ticker_data, adjclose=True)
+            return_series[ticker] = full_return
         else:
             print(f"No data for {ticker}")
 
@@ -49,9 +53,9 @@ def main():
         start_date=initial_start_date,
         end_date=end_date,
         rebalance_frequency=rebalance_frequency,
-        asset_types={ticker: info["asset_type"] for ticker, info in tickers_info.items()}
+        investment_vehicles={ticker: info["investment_vehicle"] for ticker, info in tickers_info.items()}
     )
-    portfolio.allocate({"MSFT": 40, "AAPL": 30, "GOOG": 30})  # Adjust as needed
+    portfolio.allocate({"VOO": 35, "IJH": 10, "VXUS": 15, "BND": 30, "BNDX": 5, "VNQ": 3, "GLD": 2})  # Adjust as needed
     portfolio.balance(cash_initial)
     portfolio.rebalance()
     print(portfolio)

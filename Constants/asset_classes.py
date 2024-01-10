@@ -1,0 +1,5 @@
+STOCK = "stock"
+BOND = "bond"
+CASH = "cash"
+CASH_EQUIVALENT = "cash equivalent"
+COMMODITY = "commodity"

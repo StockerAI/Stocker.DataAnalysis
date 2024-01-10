@@ -141,7 +141,7 @@ class BasePortfolio():
         values = collections.OrderedDict(sorted(self.final_returns.items()))
         peak = list(values.values())[0]  # Starting with the first value as the initial peak
         max_drawdown = 0
-        for date, value in values.items():
+        for _, value in values.items():
             if value > peak:
                 peak = value  # Update the peak if current value is higher
             drawdown = (peak - value) / peak if peak != 0 else 0  # Calculate drawdown
