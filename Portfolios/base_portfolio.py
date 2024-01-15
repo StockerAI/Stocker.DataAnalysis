@@ -27,7 +27,6 @@ class BasePortfolio():
         self.allocations = {ticker: 0.0 for ticker in initial_funds}  # Initialize allocations to 0% for each ticker
         self.final_returns = dict()
         self.final_returns[self.start_date] = initial_funds["cash"]
-        self.possible_dates = list()
     
     def calculate_returns(self, hist_data, adjclose=True):
         """
@@ -72,8 +71,6 @@ class BasePortfolio():
         weekly_returns = total_return_data.resample("W").ffill().pct_change().fillna(0)
         weekly_returns.index = [*weekly_returns.index[:-1], datetime.datetime.combine(hist_data.index[-1], datetime.time())]
         daily_returns = total_return_data.pct_change().fillna(0)
-
-        self.possible_dates = daily_returns.index
         
         # Return a dictionary containing all the calculated returns
         return {
@@ -178,18 +175,24 @@ class BasePortfolio():
         """
         Calculates the standard deviation of the portfolio's total returns over time.
         """
-        if not self.final_returns:
+        # Check if final_returns is empty or has only one element
+        if not self.final_returns or len(self.final_returns) < 2:
             return 0
 
+        # Sorting the final_returns
         values = collections.OrderedDict(sorted(self.final_returns.items()))
 
         # Extract return values from final_returns
         returns = list(values.values())
 
-        # Calculate the percentage change in returns
-        pct_change_returns = [((returns[i] - returns[i-1]) / returns[i-1]) for i in range(1, len(returns))]
+        # Calculate the percentage change in returns, handling division by zero
+        pct_change_returns = []
+        for i in range(1, len(returns)):
+            if returns[i-1] != 0:
+                change = ((returns[i] - returns[i-1]) / returns[i-1])
+                pct_change_returns.append(change)
 
-        # Calculate standard deviation using numpy
+        # Return sample standard deviation using numpy
         return numpy.std(pct_change_returns)
 
     def calculate_max_drawdown(self):
