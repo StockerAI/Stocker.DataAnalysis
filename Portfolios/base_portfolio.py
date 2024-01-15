@@ -27,6 +27,64 @@ class BasePortfolio():
         self.allocations = {ticker: 0.0 for ticker in initial_funds}  # Initialize allocations to 0% for each ticker
         self.final_returns = dict()
         self.final_returns[self.start_date] = initial_funds["cash"]
+        self.possible_dates = list()
+    
+    def calculate_returns(self, hist_data, adjclose=True):
+        """
+        Calculates various types of returns for a given historical data.
+
+        Parameters:
+            hist_data (DataFrame): The historical data of a financial instrument.
+            adjclose (bool): A flag to determine if adjusted close prices should be used.
+
+        Returns:
+            dict: A dictionary containing full, annualized, quarterly, monthly, weekly, and daily returns.
+        """
+        # Ensure the data is sorted by date
+        hist_data = hist_data.sort_index()
+
+        # Choose between adjusted close prices or raw close prices
+        if adjclose:
+            # Adjust for dividends
+            total_return_data = hist_data["adjclose"]
+        else:
+            # Only consider price changes
+            total_return_data = hist_data["close"]
+        
+        if not isinstance(hist_data.index, pandas.DatetimeIndex):
+            total_return_data.index = pandas.to_datetime(total_return_data.index)
+
+        # Calculate full return from start to end
+        start_value = total_return_data.iloc[0]
+        end_value = total_return_data.iloc[-1]
+        full_return = (end_value / start_value) - 1
+        full_return_series = pandas.Series([full_return], index=[datetime.datetime.combine(hist_data.index[-1], datetime.time())])
+
+        # Calculate other types of returns
+        annually_returns = total_return_data.resample("Y").ffill().pct_change().fillna(0)
+        annually_returns.index = [*annually_returns.index[:-1], datetime.datetime.combine(hist_data.index[-1], datetime.time())]
+        semi_annually_returns = total_return_data.resample("6M").ffill().pct_change().fillna(0)
+        semi_annually_returns.index = [*semi_annually_returns.index[:-1], datetime.datetime.combine(hist_data.index[-1], datetime.time())]
+        quarterly_returns = total_return_data.resample("Q").ffill().pct_change().fillna(0)
+        quarterly_returns.index = [*quarterly_returns.index[:-1], datetime.datetime.combine(hist_data.index[-1], datetime.time())]
+        monthly_returns = total_return_data.resample("M").ffill().pct_change().fillna(0)
+        monthly_returns.index = [*monthly_returns.index[:-1], datetime.datetime.combine(hist_data.index[-1], datetime.time())]
+        weekly_returns = total_return_data.resample("W").ffill().pct_change().fillna(0)
+        weekly_returns.index = [*weekly_returns.index[:-1], datetime.datetime.combine(hist_data.index[-1], datetime.time())]
+        daily_returns = total_return_data.pct_change().fillna(0)
+
+        self.possible_dates = daily_returns.index
+        
+        # Return a dictionary containing all the calculated returns
+        return {
+            RDO["NEVER"]["returns"]: full_return_series,
+            RDO["ANNUALLY"]["returns"]: annually_returns,
+            RDO["SEMI_ANNUALLY"]["returns"]: semi_annually_returns,
+            RDO["QUARTERLY"]["returns"]: quarterly_returns,
+            RDO["MONTHLY"]["returns"]: monthly_returns,
+            RDO["WEEKLY"]["returns"]: weekly_returns,
+            RDO["DAILY"]["returns"]: daily_returns
+        }
 
     def allocate(self, allocations):
         """
@@ -147,6 +205,33 @@ class BasePortfolio():
             drawdown = (peak - value) / peak if peak != 0 else 0  # Calculate drawdown
             max_drawdown = max(max_drawdown, drawdown)  # Update max_drawdown if current drawdown is higher
         return max_drawdown
+    
+    def calculate_sharpe_ratio(self, risk_free_rate):
+        # Ensure there are final returns to calculate the Sharpe Ratio
+        if not self.final_returns:
+            return None
+
+        # Calculate portfolio returns as percentage change
+        values = collections.OrderedDict(sorted(self.final_returns.items()))
+        returns = list(values.values())
+        pct_change_returns = [(returns[i] - returns[i - 1]) / returns[i - 1] for i in range(1, len(returns))]
+
+        # Convert list of returns into a numpy array for calculation
+        returns_array = numpy.array(pct_change_returns)
+
+        # Calculate the average of annual returns
+        mean_return = numpy.mean(returns_array)
+
+        # Since these are already annual returns, no further annualization is needed
+        annualized_return = mean_return
+
+        # Annualized standard deviation (already correct)
+        annualized_std_deviation = numpy.std(returns_array)
+
+        # Calculate the Sharpe Ratio
+        sharpe_ratio = (annualized_return - risk_free_rate) / annualized_std_deviation if annualized_std_deviation != 0 else float('nan')
+
+        return sharpe_ratio
     
     def __str__(self):
         """
