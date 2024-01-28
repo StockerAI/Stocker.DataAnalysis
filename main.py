@@ -9,8 +9,8 @@ from Portfolios.BalancedPortfolio.balanced_portfolio import BalancedPortfolio
 def main():
     # Set up initial parameters
     initial_start_date = datetime.date(2014, 12, 31)
-    # end_date = datetime.date(2015, 1, 31)
-    end_date = datetime.date(2021, 5, 28)
+    end_date = datetime.date(2017, 1, 1)
+    # end_date = datetime.date(2021, 12, 31)
     rebalance_frequency = RDO["MONTHLY"]  # Set your desired rebalance frequency
 
     # Initial cash amount
@@ -54,7 +54,7 @@ def main():
 
         if not ticker_data.empty:
             # Call calculate_returns as a method of the portfolio instance
-            full_return = portfolio.calculate_returns(ticker_data, adjclose=True)
+            full_return = portfolio.calculate_returns(ticker_data, adjclose=False)
             portfolio.return_series[ticker] = full_return
         else:
             print(f"No data for {ticker}")
@@ -62,12 +62,12 @@ def main():
     portfolio.allocate({"VOO": 35, "IJH": 10, "VXUS": 15, "BND": 30, "BNDX": 5, "VNQ": 3, "GLD": 2})  # Adjust as needed
     # portfolio.allocate({"VOO": 100})  # Adjust as needed
     portfolio.balance(cash_initial)
-    portfolio.rebalance()
     print(portfolio)
-    print(f"Calculation of {rebalance_frequency['name']} CAGR: {portfolio.calculate_cagr() * 100:.2f}%")
-    print(f"Calculation of {rebalance_frequency['name']} Stdev: {portfolio.calculate_stdev() * 100:.2f}%")
-    print(f"Calculation of {rebalance_frequency['name']} Max. Drawdown: {portfolio.calculate_max_drawdown() * 100:.2f}%")
-    print(f"Calcumation of {rebalance_frequency['name']} Sharpe Ratio: {portfolio.calculate_sharpe_ratio(0.0465):.2f}")
+    print(f"Calculation of CAGR: {portfolio.calculate_cagr() * 100:.2f}%")
+    print(f"Calculation of monthly Stdev: {portfolio.calculate_stdev()['monthly'] * 100:.2f}%")
+    print(f"Calculation of annually Stdev: {portfolio.calculate_stdev()['annually'] * 100:.2f}%")
+    print(f"Calculation of Max. Drawdown: {portfolio.calculate_max_drawdown() * 100:.2f}%")
+    print(f"Calcumation of Sharpe Ratio: {portfolio.calculate_sharpe_ratio(0.0521):.2f}")
 
 if __name__ == "__main__":
     main()
