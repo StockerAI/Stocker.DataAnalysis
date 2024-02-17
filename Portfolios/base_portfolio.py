@@ -1,7 +1,6 @@
 import pandas
 import numpy
 import datetime
-import collections
 from dateutil.relativedelta import relativedelta
 from Constants.rebalance_date_options import RDO
 
@@ -28,7 +27,9 @@ class BasePortfolio():
         self.final_returns = dict()
         self.final_returns[self.start_date] = initial_funds["cash"]
         self.useful_dates = list()
-        self.daily_returns = dict()
+        self.daily_returns = pandas.DataFrame(columns=['Returns', 'Change'])
+        self.monthly_returns = pandas.DataFrame(columns=['Returns', 'Change'])
+        self.annually_returns = pandas.DataFrame(columns=['Returns', 'Change'])
     
     def calculate_returns(self, hist_data, adjclose=True):
         """
@@ -86,6 +87,109 @@ class BasePortfolio():
             RDO["WEEKLY"]["returns"]: weekly_returns,
             RDO["DAILY"]["returns"]: daily_returns
         }
+    
+    def calculate_monthly_returns(self):
+        """
+        Calculate the returns on the actual last trading day of each month.
+        """
+        # Ensure daily_returns index is a DatetimeIndex
+        self.daily_returns.index = pandas.to_datetime(self.daily_returns.index)
+
+        # Iterate over each month within the range of dates in daily_returns
+        start_date = self.daily_returns.index.min()
+        end_date = self.daily_returns.index.max()
+        current_date = start_date
+
+        while current_date <= end_date:
+            # Get the last calendar day of the current month
+            last_calendar_day = last_day_of_month(current_date)
+            
+            # Find the closest earlier trading day in daily_returns
+            last_trading_day = find_closest_earlier_date(last_calendar_day, self.daily_returns.index)
+
+            if last_trading_day or start_date:
+                # Check if the last trading day is already in monthly_returns
+                if last_trading_day and last_trading_day not in self.monthly_returns.index:
+                    # Get the returns for the last trading day from daily_returns
+                    returns = self.daily_returns.loc[last_trading_day, 'Returns']
+
+                    # Create a new DataFrame for this row and use concat to add it
+                    new_row = pandas.DataFrame({'Returns': [returns]}, index=[last_trading_day])
+                    self.monthly_returns = pandas.concat([self.monthly_returns, new_row])
+                
+                if start_date and start_date not in self.monthly_returns.index:
+                    # Get the returns for the last trading day from daily_returns
+                    returns = self.daily_returns.loc[start_date, 'Returns']
+
+                    # Create a new DataFrame for this row and use concat to add it
+                    new_row = pandas.DataFrame({'Returns': [returns]}, index=[start_date])
+                    self.monthly_returns = pandas.concat([self.monthly_returns, new_row])
+
+            # Move to the next month
+            current_date = last_calendar_day + datetime.timedelta(days=1)
+
+        # Calculate monthly 'Change' column based on 'Returns'
+        self.monthly_returns['Change'] = self.monthly_returns['Returns'].pct_change()
+
+        # Ensure the DataFrame is properly sorted by date
+        self.monthly_returns.sort_index(inplace=True)
+    
+    def calculate_annually_returns(self):
+        """
+        Calculate the returns on the actual last trading day of each year, 
+        including the first and last days' values if the date span is less than a year.
+        """
+        # Ensure daily_returns index is a DatetimeIndex
+        self.daily_returns.index = pandas.to_datetime(self.daily_returns.index)
+
+        # Create an empty DataFrame for annually_returns if it doesn't exist
+        if not hasattr(self, 'annually_returns'):
+            self.annually_returns = pandas.DataFrame(columns=['Returns'])
+
+        start_date = self.daily_returns.index.min()
+        end_date = self.daily_returns.index.max()
+
+        # Check if the span is less than a year
+        if (end_date - start_date).days < 365:
+            # Add the first day's return
+            if start_date not in self.annually_returns.index:
+                start_returns = self.daily_returns.loc[start_date, 'Returns']
+                new_row_start = pandas.DataFrame({'Returns': [start_returns]}, index=[start_date])
+                self.annually_returns = pandas.concat([self.annually_returns, new_row_start])
+
+            # Add the last day's return
+            if end_date not in self.annually_returns.index:
+                end_returns = self.daily_returns.loc[end_date, 'Returns']
+                new_row_end = pandas.DataFrame({'Returns': [end_returns]}, index=[end_date])
+                self.annually_returns = pandas.concat([self.annually_returns, new_row_end])
+
+        else:
+            # Iterate over each year within the range of dates in daily_returns
+            start_year = start_date.year
+            end_year = end_date.year
+
+            for year in range(start_year, end_year + 1):
+                # Get the last calendar day of December for the current year
+                last_calendar_day_of_year = pandas.Timestamp(year=year, month=12, day=31)
+
+                # Find the closest earlier trading day in daily_returns
+                last_trading_day_of_year = find_closest_earlier_date(last_calendar_day_of_year, self.daily_returns.index)
+
+                if last_trading_day_of_year:
+                    # Check if the last trading day is already in annually_returns
+                    if last_trading_day_of_year not in self.annually_returns.index:
+                        # Get the returns for the last trading day from daily_returns
+                        returns = self.daily_returns.loc[last_trading_day_of_year, 'Returns']
+
+                        # Create a new DataFrame for this row and use concat to add it
+                        new_row = pandas.DataFrame({'Returns': [returns]}, index=[last_trading_day_of_year])
+                        self.annually_returns = pandas.concat([self.annually_returns, new_row])
+
+        # Calculate annual 'Change' column based on 'Returns', if desired
+        self.annually_returns['Change'] = self.annually_returns['Returns'].pct_change()
+
+        # Ensure the DataFrame is properly sorted by date
+        self.annually_returns.sort_index(inplace=True)
 
     def allocate(self, allocations):
         """
@@ -109,26 +213,42 @@ class BasePortfolio():
         """
         for ticker in self.funds:
             self.funds[ticker] = initial_cash * self.allocations.get(ticker, 0) / 100
-        self.update_daily_returns(self.start_date)
-    
-    def update_daily_returns(self, current_date):
+        self.calculate_daily_returns(self.start_date)
+
+    def calculate_daily_returns(self, current_date):
         """
         Update daily returns from a given start date to the end date.
         """
         self.generate_rebalance_dates()
+
         for current_date in self.useful_dates:
             daily_portfolio_value = self.get_total_value(returns_type="daily_returns", until=current_date)
-            self.daily_returns[current_date] = daily_portfolio_value
+            
+            # Create a new DataFrame for the current day's return
+            new_row = pandas.DataFrame({'Returns': [daily_portfolio_value]}, index=[pandas.to_datetime(current_date)])
+            
+            # Use pandas.concat to add the new row to self.daily_returns
+            self.daily_returns = pandas.concat([self.daily_returns, new_row])
+            
             if current_date in self.rebalance_dates:
-                self.rebalance(current_date)
+                # At this point, self.daily_returns contains all the rows up to the current date
+                self.rebalance()
+        
+        # Calculate daily percentage change
+        self.daily_returns['Change'] = self.daily_returns['Returns'].pct_change()
 
-    def rebalance(self, rebalance_date):
+    def rebalance(self):
         """
         Rebalances the portfolio to maintain the allocation ratios.
         This is typically called after the market values have changed.
         """
+        # Assuming 'Returns' is the column name in the DataFrame you want to use
         for ticker in self.funds:
-            self.funds[ticker] = list(self.daily_returns.values())[-1] * self.allocations.get(ticker, 0) / 100
+            # Get the last value from the 'Returns' column for the given ticker
+            last_return = self.daily_returns['Returns'].iloc[-1]
+            
+            # Update the fund value for the ticker based on the last return and the allocation ratio
+            self.funds[ticker] = last_return * self.allocations.get(ticker, 0) / 100
 
     def generate_rebalance_dates(self):
         """
@@ -202,21 +322,23 @@ class BasePortfolio():
             self.funds[ticker] = ticker_value
             total_value += ticker_value
 
-
         return total_value
     
     def calculate_cagr(self):
-        if not self.daily_returns:
+        if self.daily_returns.empty:
             return 0  # Handle case with no returns data
         
-        # Convert keys to list and sort to ensure chronological order
-        dates = sorted(self.daily_returns.keys())
-        start_date = dates[0]
-        end_date = dates[-1]
+        # Ensure the index is in datetime format and sort the DataFrame to ensure chronological order
+        self.daily_returns.index = pandas.to_datetime(self.daily_returns.index)
+        self.daily_returns.sort_index(inplace=True)
         
-        # Get start and end values
-        start_value = self.daily_returns[start_date]
-        end_value = self.daily_returns[end_date]
+        # Get start and end dates from the DataFrame's index
+        start_date = self.daily_returns.index[0]
+        end_date = self.daily_returns.index[-1]
+        
+        # Get start and end values from the 'Returns' column
+        start_value = self.daily_returns['Returns'].iloc[0]
+        end_value = self.daily_returns['Returns'].iloc[-1]
         
         # Calculate the number of years between start and end dates
         years = (end_date - start_date).days / 365.25
@@ -226,54 +348,36 @@ class BasePortfolio():
         return cagr
 
     def calculate_stdev(self):
-        if len(self.daily_returns) < 2:
-            return {'monthly': 0, 'annual': 0}  # Not enough data to calculate standard deviation
+        if len(self.monthly_returns) < 2:
+            return {'monthly': 0}  # Not enough data to calculate standard deviation
 
-        # Convert daily returns to a Pandas Series for easier manipulation
-        dates = list(self.daily_returns.keys())
-        values = list(self.daily_returns.values())
-        daily_returns = pandas.Series([(values[i] - values[i - 1]) / values[i - 1] for i in range(1, len(values))], index=dates[1:])
+        # Calculate standard deviation for monthly 'Change' from self.monthly_returns
+        self.monthly_returns['Change'].dropna(inplace=True)
+        monthly_stdev = self.monthly_returns['Change'].std()
+        self.annually_returns['Change'].dropna(inplace=True)
+        annually_stdev = self.annually_returns['Change'].std()
 
-        # Ensure the index is a DatetimeIndex
-        daily_returns.index = pandas.to_datetime(daily_returns.index)
-
-        # Group by month and calculate monthly returns
-        monthly_returns = daily_returns.resample('M').apply(lambda x: (1 + x).prod() - 1)
-
-        # Group by year and calculate annual returns
-        annual_returns = daily_returns.resample('Y').apply(lambda x: (1 + x).prod() - 1)
-
-        # Calculate standard deviations
-        monthly_stdev = monthly_returns.std()
-        annual_stdev = annual_returns.std()
-
-        return {'monthly': monthly_stdev, 'annually': annual_stdev}
+        return {'monthly': monthly_stdev, 'annually': annually_stdev}
 
     def calculate_max_drawdown(self):
-        if not self.daily_returns:
+        if self.monthly_returns.empty:
             return 0  # Handle case with no returns data
+        
+        self.monthly_returns['Change'].fillna(0, inplace=True)
 
-        # Convert daily_returns to a Pandas DataFrame for easier manipulation
-        dates = list(self.daily_returns.keys())
-        values = list(self.daily_returns.values())
-        daily_returns_df = pandas.DataFrame(values, index=pandas.to_datetime(dates), columns=['Portfolio Value'])
+        # Calculate cumulative returns from monthly 'Change'
+        cumulative_returns = (1 + self.monthly_returns['Change']).cumprod()
 
-        # Calculate daily percentage returns
-        daily_returns_df['Daily Returns'] = daily_returns_df['Portfolio Value'].pct_change()
-
-        # Resample to monthly returns and calculate cumulative product to simulate monthly compounded returns
-        monthly_cumulative_returns = (1 + daily_returns_df['Daily Returns'].resample('M').sum()).cumprod()
-
-        # Initialize variables to track peak, trough and max drawdown
-        peak = monthly_cumulative_returns[0]
+        # Initialize variables to track peak, trough, and max drawdown
+        peak = cumulative_returns.iloc[0]
         max_drawdown = 0
 
         # Iterate over the cumulative returns to calculate drawdowns
-        for cum_return in monthly_cumulative_returns:
+        for cum_return in cumulative_returns:
             # If new peak is found, update peak
             if cum_return > peak:
                 peak = cum_return
-            
+
             # Calculate drawdown from peak to current point
             drawdown = (peak - cum_return) / peak
 
@@ -283,49 +387,47 @@ class BasePortfolio():
 
         return max_drawdown
 
-    def calculate_sharpe_ratio(self, risk_free_rate):
-        if len(self.daily_returns) < 2:
-            return None  # Not enough data to calculate Sharpe Ratio
+    # def calculate_sharpe_ratio(self, mean_monthly_excess_return, periods_per_year=12):
+    #     """
+    #     Calculate the annualized Sharpe Ratio.
 
-        # Convert daily_returns to a Pandas DataFrame for easier manipulation
-        dates = list(self.daily_returns.keys())
-        values = list(self.daily_returns.values())
-        daily_returns_df = pandas.DataFrame(values, index=pandas.to_datetime(dates), columns=['Portfolio Value'])
+    #     Parameters:
+    #     mean_monthly_excess_return (float): The mean monthly excess return of the portfolio over the risk-free rate.
+    #     periods_per_year (int, optional): The number of periods in a year, default is 12 for monthly data.
 
-        # Calculate daily percentage returns
-        daily_returns_df['Daily Returns'] = daily_returns_df['Portfolio Value'].pct_change()
-
-        # Resample to monthly returns
-        monthly_returns = daily_returns_df['Daily Returns'].resample('M').sum()
-
-        # Calculate monthly excess returns over the risk-free rate
-        # Assuming risk-free rate is an annual rate, divide by 12 to get monthly rate
-        monthly_excess_returns = monthly_returns - (risk_free_rate / 12)
-
-        # Calculate mean and standard deviation of monthly excess returns
-        mean_excess_return = monthly_excess_returns.mean()
-        stdev_excess_return = monthly_excess_returns.std()
-
-        # Annualize the mean excess return and stdev of excess return
-        # Assuming 12 periods per year for monthly data
-        annualized_mean_excess_return = mean_excess_return * 12
-        annualized_stdev_excess_return = stdev_excess_return * (12 ** 0.5)
-
-        # Calculate Sharpe Ratio
-        sharpe_ratio = annualized_mean_excess_return / annualized_stdev_excess_return if annualized_stdev_excess_return != 0 else float('nan')
-
-        return sharpe_ratio
+    #     Returns:
+    #     float: The annualized Sharpe Ratio.
+    #     """
+    #     stdev_dict = self.calculate_stdev()  # This returns a dictionary
+    #     monthly_stdev = stdev_dict['monthly']  # Extract the monthly standard deviation
+    #     if monthly_stdev == 0:  # Prevent division by zero
+    #         return 0
+    #     sharpe_ratio = mean_monthly_excess_return / monthly_stdev
+    #     annualized_sharpe_ratio = sharpe_ratio * numpy.sqrt(periods_per_year)
+    #     return annualized_sharpe_ratio
 
     def __str__(self):
         """
         String representation of the BasePortfolio object.
 
         Returns:
-            str: A string showing the portfolio allocation and final returns.
+            str: A string showing the portfolio allocation and the returns on the actual last trading day of each month.
         """
         allocation_str = ", ".join([f"{ticker}: {alloc}%" for ticker, alloc in self.allocations.items()])
-        daily_returns_str = "\n".join([f"{date.strftime('%Y-%m-%d')}: {value:.2f}" for date, value in self.daily_returns.items()])
-        return f"Portfolio Allocation: {allocation_str}\nDaily Returns:\n{daily_returns_str}"
+
+        self.calculate_monthly_returns()
+        self.calculate_annually_returns()
+
+        with pandas.option_context('display.max_rows', None,
+                       'display.max_columns', None,
+                    #    'display.precision', 3,
+                       ):
+            print(self.annually_returns)
+
+        # Format the monthly returns for the string representation
+        monthly_returns_str = "\n".join([f"{date.strftime('%Y-%m-%d')}: Returns: {row['Returns']:.2f}, Change: {row['Change'] * 100:.2f}%" for date, row in self.monthly_returns.iterrows()])
+
+        return f"Portfolio Allocation: {allocation_str}\nReturns on Actual Last Trading Day of Each Month:\n{monthly_returns_str}"
 
 def last_day_of_month(any_day):
     """Return the last day of the month of any_day"""
@@ -344,7 +446,7 @@ def find_closest_earlier_date(target_date, date_list):
     datetime.date: The closest earlier date found in the list. 
                    If no earlier date exists, returns None.
     """
-    earlier_dates = [date for date in date_list if date < target_date]
+    earlier_dates = [date for date in date_list if date <= target_date]
     if not earlier_dates:
         return None
     return min(earlier_dates, key=lambda date: (target_date - date).days)

@@ -8,8 +8,10 @@ from Portfolios.BalancedPortfolio.balanced_portfolio import BalancedPortfolio
 
 def main():
     # Set up initial parameters
-    initial_start_date = datetime.date(2014, 12, 31)
+    initial_start_date = datetime.date(2013, 12, 31)
     end_date = datetime.date(2017, 1, 1)
+    # initial_start_date = datetime.date(2021, 12, 31)
+    # end_date = datetime.date(2022, 12, 31)
     # end_date = datetime.date(2021, 12, 31)
     rebalance_frequency = RDO["MONTHLY"]  # Set your desired rebalance frequency
 
@@ -30,6 +32,10 @@ def main():
 
     # tickers_info = {
     #     "VOO": {"stock_market": SM.OTHER, "investment_vehicle": IV.ETF},
+    # }
+
+    # tickers_info = {
+    #     "BTCS": {"stock_market": SM.NASDAQ, "investment_vehicle": IV.ETF},
     # }
 
     # Initialize funds for each ticker and add cash
@@ -61,13 +67,14 @@ def main():
 
     portfolio.allocate({"VOO": 35, "IJH": 10, "VXUS": 15, "BND": 30, "BNDX": 5, "VNQ": 3, "GLD": 2})  # Adjust as needed
     # portfolio.allocate({"VOO": 100})  # Adjust as needed
+    # portfolio.allocate({"BTCS": 100})  # Adjust as needed
     portfolio.balance(cash_initial)
     print(portfolio)
     print(f"Calculation of CAGR: {portfolio.calculate_cagr() * 100:.2f}%")
     print(f"Calculation of monthly Stdev: {portfolio.calculate_stdev()['monthly'] * 100:.2f}%")
     print(f"Calculation of annually Stdev: {portfolio.calculate_stdev()['annually'] * 100:.2f}%")
     print(f"Calculation of Max. Drawdown: {portfolio.calculate_max_drawdown() * 100:.2f}%")
-    print(f"Calcumation of Sharpe Ratio: {portfolio.calculate_sharpe_ratio(0.0521):.2f}")
+    # print(f"Calcumation of Sharpe Ratio: {portfolio.calculate_sharpe_ratio(0.0522):.2f}")
 
 if __name__ == "__main__":
     main()
