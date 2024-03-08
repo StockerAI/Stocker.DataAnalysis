@@ -418,12 +418,6 @@ class BasePortfolio():
         self.calculate_monthly_returns()
         self.calculate_annually_returns()
 
-        with pandas.option_context('display.max_rows', None,
-                       'display.max_columns', None,
-                    #    'display.precision', 3,
-                       ):
-            print(self.annually_returns)
-
         # Format the monthly returns for the string representation
         monthly_returns_str = "\n".join([f"{date.strftime('%Y-%m-%d')}: Returns: {row['Returns']:.2f}, Change: {row['Change'] * 100:.2f}%" for date, row in self.monthly_returns.iterrows()])
 

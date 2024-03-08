@@ -27,7 +27,6 @@ def main():
         "BNDX": {"stock_market": SM.NASDAQ, "investment_vehicle": IV.ETF},
         "VNQ": {"stock_market": SM.OTHER, "investment_vehicle": IV.ETF},
         "GLD": {"stock_market": SM.OTHER, "investment_vehicle": IV.ETF},
-        # Other tickers can be added here
     }
 
     # tickers_info = {
